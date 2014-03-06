@@ -20,3 +20,6 @@ Sample usage
     
     //RenderSystem will render any entities that have both a Tile and a Position component.
     engine.addEntity(new Entity().add(new Tile(tileID)).add(new Position()));
+    
+    //Display the first frame. Use a TickProvider if you want to display more than that.
+    engine.update(0);
