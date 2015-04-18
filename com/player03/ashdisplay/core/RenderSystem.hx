@@ -14,12 +14,15 @@ import openfl.display.Tilesheet;
 class RenderSystem extends ListIteratingSystem<CanvasNode> {
 	private var tileNodeList:NodeList<TileNode>;
 	private var rotatingTileNodeList:NodeList<RotatingTileNode>;
+	private var activeNodeList:NodeList<Dynamic>;
 	
 	private var allowRotation:Bool;
 	private var smooth:Bool;
 	private var flags:Int;
 	
 	private var tilesheet:Tilesheet;
+	private var data:Array<Float>;
+	private var rebuildData:Bool = false;
 	
 	/**
 	 * @param	allowRotation Whether the tiles can be rotated. If this is
@@ -31,6 +34,7 @@ class RenderSystem extends ListIteratingSystem<CanvasNode> {
 		super(CanvasNode, updateNode);
 		
 		this.tilesheet = tilesheet;
+		data = [];
 		
 		this.allowRotation = allowRotation;
 		this.smooth = smooth;
@@ -42,34 +46,69 @@ class RenderSystem extends ListIteratingSystem<CanvasNode> {
 		
 		if(allowRotation) {
 			rotatingTileNodeList = engine.getNodeList(RotatingTileNode);
+			activeNodeList = rotatingTileNodeList;
 		} else {
 			tileNodeList = engine.getNodeList(TileNode);
+			activeNodeList = tileNodeList;
 		}
+		
+		activeNodeList.nodeAdded.add(nodeAddedOrRemoved);
+		activeNodeList.nodeRemoved.add(nodeAddedOrRemoved);
     }
 	
     public override function removeFromEngine(engine:Engine):Void {
 		super.removeFromEngine(engine);
 		tileNodeList = null;
 		rotatingTileNodeList = null;
+		
+		activeNodeList.nodeAdded.removeAll();
+		activeNodeList = null;
+	}
+	
+	private function nodeAddedOrRemoved(node:Dynamic):Void {
+		rebuildData = true;
+	}
+	
+	public override function update(time:Float):Void {
+		if(rebuildData) {
+			rebuildData = false;
+			
+			var dataLength:Int = Lambda.count(activeNodeList)
+				* (allowRotation ? 4 : 3);
+			
+			if(dataLength < data.length) {
+				data.splice(dataLength, data.length - dataLength);
+			} else {
+				for(i in data.length...dataLength) {
+					data.push(0);
+				}
+			}
+		}
+		
+		super.update(time);
 	}
 	
 	private function updateNode(canvas:CanvasNode, time:Float):Void {
-		var data:Array<Float> = [];
+		var i:Int = 0;
 		
 		if(allowRotation) {
 			//Sets of four: [x, y, tileID, rotation]
 			for(tileNode in rotatingTileNodeList) {
-				data.push(tileNode.position.x);
-				data.push(tileNode.position.y);
-				data.push(tileNode.image.id);
-				data.push(tileNode.rotation.rotation);
+				data[i] = tileNode.position.x;
+				data[i + 1] = tileNode.position.y;
+				data[i + 2] = tileNode.image.id;
+				data[i + 3] = tileNode.rotation.rotation;
+				
+				i += 4;
 			}
 		} else {
 			//Sets of three: [x, y, tileID]
 			for(tileNode in tileNodeList) {
-				data.push(tileNode.position.x);
-				data.push(tileNode.position.y);
-				data.push(tileNode.image.id);
+				data[i] = tileNode.position.x;
+				data[i + 1] = tileNode.position.y;
+				data[i + 2] = tileNode.image.id;
+				
+				i += 3;
 			}
 		}
 		
