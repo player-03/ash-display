@@ -16,6 +16,8 @@ class RenderSystem extends ListIteratingSystem<CanvasNode> {
 	private var rotatingTileNodeList:NodeList<RotatingTileNode>;
 	private var activeNodeList:NodeList<Dynamic>;
 	
+	private var sortEachFrame:Bool;
+	
 	private var allowRotation:Bool;
 	private var smooth:Bool;
 	private var flags:Int;
@@ -29,12 +31,18 @@ class RenderSystem extends ListIteratingSystem<CanvasNode> {
 	 * true, you will have to add a Rotation component to your entities for
 	 * them to be rendered.
 	 * @param	smooth Whether tiles should be smoothed when drawing.
+	 * @param	sortEachFrame If true, the nodes will be sorted by y
+	 * coordinate every frame. Insertion sort will be used if there
+	 * aren't many nodes, and merge sort will be used otherwise. (The
+	 * cutoff between "not many" and "many" was chosen arbitrarily.)
 	 */
-	public function new(tilesheet:Tilesheet, allowRotation:Bool = false, smooth:Bool = false) {
+	public function new(tilesheet:Tilesheet, allowRotation:Bool = false, smooth:Bool = false, sortEachFrame:Bool = false) {
 		super(CanvasNode, updateNode);
 		
 		this.tilesheet = tilesheet;
 		data = [];
+		
+		this.sortEachFrame = sortEachFrame;
 		
 		this.allowRotation = allowRotation;
 		this.smooth = smooth;
@@ -70,17 +78,36 @@ class RenderSystem extends ListIteratingSystem<CanvasNode> {
 	}
 	
 	public override function update(time:Float):Void {
+		var dataLength:Int = 0;
+		if(rebuildData || sortEachFrame) {
+			dataLength = Lambda.count(activeNodeList)
+				* (allowRotation ? 4 : 3);
+		}
+		
 		if(rebuildData) {
 			rebuildData = false;
-			
-			var dataLength:Int = Lambda.count(activeNodeList)
-				* (allowRotation ? 4 : 3);
 			
 			if(dataLength < data.length) {
 				data.splice(dataLength, data.length - dataLength);
 			} else {
 				for(i in data.length...dataLength) {
 					data.push(0);
+				}
+			}
+		}
+		
+		if(sortEachFrame) {
+			if(dataLength > 200) {
+				if(allowRotation) {
+					rotatingTileNodeList.mergeSort(rotatingTileNodeSort);
+				} else {
+					tileNodeList.mergeSort(tileNodeSort);
+				}
+			} else {
+				if(allowRotation) {
+					rotatingTileNodeList.insertionSort(rotatingTileNodeSort);
+				} else {
+					tileNodeList.insertionSort(tileNodeSort);
 				}
 			}
 		}
@@ -115,6 +142,13 @@ class RenderSystem extends ListIteratingSystem<CanvasNode> {
 		var surface:Graphics = canvas.canvas.surface;
 		surface.clear();
 		tilesheet.drawTiles(surface, data, smooth, flags);
+	}
+	
+	private function tileNodeSort(a:TileNode, b:TileNode):Int {
+		return Math.round(a.position.y - b.position.y);
+	}
+	private function rotatingTileNodeSort(a:RotatingTileNode, b:RotatingTileNode):Int {
+		return Math.round(a.position.y - b.position.y);
 	}
 }
 
